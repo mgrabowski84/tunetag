@@ -1,10 +1,16 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { useFiles } from "../FilesContext";
+import type { FileEntry } from "../types";
 
 interface MenuItem {
   label: string;
   shortcut?: string;
   separator?: boolean;
   disabled?: boolean;
+  checked?: boolean;
+  action?: () => void;
 }
 
 interface Menu {
@@ -12,51 +18,134 @@ interface Menu {
   items: MenuItem[];
 }
 
-const menus: Menu[] = [
-  {
-    label: "File",
-    items: [
-      { label: "Open Files\u2026", shortcut: "Ctrl+O" },
-      { label: "Open Folder\u2026", shortcut: "Ctrl+Shift+O" },
-      { separator: true, label: "" },
-      { label: "Save", shortcut: "Ctrl+S", disabled: true },
-      { separator: true, label: "" },
-      { label: "Close All", disabled: true },
-    ],
-  },
-  {
-    label: "Edit",
-    items: [
-      { label: "Undo", shortcut: "Ctrl+Z", disabled: true },
-      { label: "Redo", shortcut: "Ctrl+Shift+Z", disabled: true },
-      { separator: true, label: "" },
-      { label: "Select All", shortcut: "Ctrl+A", disabled: true },
-    ],
-  },
-  {
-    label: "Convert",
-    items: [
-      { label: "Rename Files from Tags\u2026", disabled: true },
-      { label: "Auto-number Tracks\u2026", disabled: true },
-    ],
-  },
-  {
-    label: "Tag Sources",
-    items: [{ label: "MusicBrainz\u2026", disabled: true }],
-  },
-  {
-    label: "View",
-    items: [
-      { label: "Toggle Recursive Folder Loading" },
-      { separator: true, label: "" },
-      { label: "Refresh", shortcut: "F5" },
-    ],
-  },
-];
-
 function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
+  const { state, setFiles, toggleRecursive } = useFiles();
+
+  const handleOpenFiles = useCallback(async () => {
+    setOpenMenu(null);
+    try {
+      const selected = await open({
+        multiple: true,
+        filters: [
+          {
+            name: "Audio Files",
+            extensions: ["mp3", "flac", "m4a", "MP3", "FLAC", "M4A"],
+          },
+        ],
+      });
+      if (!selected) return;
+
+      // selected is string | string[] depending on multiple
+      const paths = Array.isArray(selected) ? selected : [selected];
+      if (paths.length === 0) return;
+
+      const entries = await invoke<FileEntry[]>("scan_paths", {
+        paths,
+        recursive: false,
+      });
+      setFiles(entries);
+    } catch {
+      // User cancelled or error — do nothing
+    }
+  }, [setFiles]);
+
+  const handleOpenFolder = useCallback(async () => {
+    setOpenMenu(null);
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+      });
+      if (!selected) return;
+
+      const folderPath = typeof selected === "string" ? selected : selected[0];
+      if (!folderPath) return;
+
+      const entries = await invoke<FileEntry[]>("scan_paths", {
+        paths: [folderPath],
+        recursive: state.recursive,
+      });
+      setFiles(entries);
+    } catch {
+      // User cancelled or error — do nothing
+    }
+  }, [state.recursive, setFiles]);
+
+  const handleToggleRecursive = useCallback(() => {
+    setOpenMenu(null);
+    toggleRecursive();
+  }, [toggleRecursive]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.ctrlKey && e.shiftKey && e.key === "O") {
+        e.preventDefault();
+        handleOpenFolder();
+      } else if (e.ctrlKey && !e.shiftKey && e.key === "o") {
+        e.preventDefault();
+        handleOpenFiles();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleOpenFiles, handleOpenFolder]);
+
+  const menus: Menu[] = [
+    {
+      label: "File",
+      items: [
+        {
+          label: "Open Files\u2026",
+          shortcut: "Ctrl+O",
+          action: handleOpenFiles,
+        },
+        {
+          label: "Open Folder\u2026",
+          shortcut: "Ctrl+Shift+O",
+          action: handleOpenFolder,
+        },
+        { separator: true, label: "" },
+        { label: "Save", shortcut: "Ctrl+S", disabled: true },
+        { separator: true, label: "" },
+        { label: "Close All", disabled: true },
+      ],
+    },
+    {
+      label: "Edit",
+      items: [
+        { label: "Undo", shortcut: "Ctrl+Z", disabled: true },
+        { label: "Redo", shortcut: "Ctrl+Shift+Z", disabled: true },
+        { separator: true, label: "" },
+        { label: "Select All", shortcut: "Ctrl+A", disabled: true },
+      ],
+    },
+    {
+      label: "Convert",
+      items: [
+        { label: "Rename Files from Tags\u2026", disabled: true },
+        { label: "Auto-number Tracks\u2026", disabled: true },
+      ],
+    },
+    {
+      label: "Tag Sources",
+      items: [{ label: "MusicBrainz\u2026", disabled: true }],
+    },
+    {
+      label: "View",
+      items: [
+        {
+          label: "Toggle Recursive Folder Loading",
+          checked: state.recursive,
+          action: handleToggleRecursive,
+        },
+        { separator: true, label: "" },
+        { label: "Refresh", shortcut: "F5", disabled: true },
+      ],
+    },
+  ];
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -97,7 +186,8 @@ function MenuBar() {
                 {menu.label}
               </button>
               {openMenu === idx && (
-                <div className="absolute left-0 top-8 bg-surface-bright border border-slate-200/60 min-w-48 py-1 z-50 rounded-md"
+                <div
+                  className="absolute left-0 top-8 bg-surface-bright border border-slate-200/60 min-w-48 py-1 z-50 rounded-md"
                   style={{ boxShadow: "0 4px 20px rgba(27, 51, 83, 0.06)" }}
                 >
                   {menu.items.map((item, itemIdx) =>
@@ -115,9 +205,28 @@ function MenuBar() {
                             : "text-on-surface hover:bg-primary-container hover:text-on-primary-container"
                         }`}
                         disabled={item.disabled}
-                        onClick={() => setOpenMenu(null)}
+                        onClick={() => {
+                          if (item.action) {
+                            item.action();
+                          } else {
+                            setOpenMenu(null);
+                          }
+                        }}
                       >
-                        <span>{item.label}</span>
+                        <span className="flex items-center gap-2">
+                          {item.checked !== undefined && (
+                            <span
+                              className={`w-3 h-3 border rounded-sm flex items-center justify-center text-[9px] ${
+                                item.checked
+                                  ? "bg-primary border-primary text-on-primary"
+                                  : "border-outline-variant"
+                              }`}
+                            >
+                              {item.checked ? "\u2713" : ""}
+                            </span>
+                          )}
+                          {item.label}
+                        </span>
                         {item.shortcut && (
                           <span className="ml-8 text-[10px] text-slate-400 font-mono">
                             {item.shortcut}
