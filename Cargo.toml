@@ -1,0 +1,18 @@
+[workspace]
+members = [
+    "crates/tunetag-core",
+    "crates/tunetag-cli",
+    "crates/tunetag-gui/src-tauri",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Michal Grabowski"]
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+lofty = "0.22"

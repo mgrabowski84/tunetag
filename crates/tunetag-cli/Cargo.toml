@@ -1,0 +1,17 @@
+[package]
+name = "tunetag-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "CLI binary for TuneTag — batch audio tag editing from the command line"
+
+[[bin]]
+name = "tunetag"
+path = "src/main.rs"
+
+[dependencies]
+tunetag-core = { path = "../tunetag-core" }
+clap = { version = "4", features = ["derive"] }
+serde.workspace = true
+serde_json.workspace = true
