@@ -10,13 +10,23 @@ function StatusBar({
   filesUnsaved,
 }: StatusBarProps) {
   return (
-    <div className="flex items-center h-6 px-3 bg-gray-100 border-t border-gray-300 text-xs text-gray-600 select-none shrink-0">
-      <span>{filesLoaded} files loaded</span>
-      <span className="mx-2 text-gray-300">|</span>
-      <span>{filesSelected} selected</span>
-      <span className="mx-2 text-gray-300">|</span>
-      <span>{filesUnsaved} unsaved</span>
-    </div>
+    <footer className="flex justify-between items-center px-3 bg-slate-50 border-t border-slate-200/50 h-6 select-none shrink-0">
+      <div className="flex items-center gap-4">
+        <span className="text-[10px] font-mono tracking-tight text-slate-500">
+          {filesLoaded} files loaded | {filesSelected} selected | {filesUnsaved}{" "}
+          unsaved
+        </span>
+        <div className="h-3 w-px bg-slate-300" />
+        <span className="text-[10px] font-mono tracking-tight text-primary">
+          Ready
+        </span>
+      </div>
+      <div className="flex items-center">
+        <span className="text-[10px] font-mono tracking-tight text-slate-400">
+          v0.1.0
+        </span>
+      </div>
+    </footer>
   );
 }
 

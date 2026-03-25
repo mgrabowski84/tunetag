@@ -6,12 +6,12 @@ import TagPanel from "./components/TagPanel";
 
 function App() {
   return (
-    <div className="h-screen flex flex-col bg-white text-gray-900">
+    <div className="h-screen flex flex-col bg-surface text-on-surface overflow-hidden">
       <MenuBar />
       <SplitPane
         left={<TagPanel />}
         right={<FileList />}
-        defaultSplit={0.25}
+        defaultLeftWidth={288}
         minLeft={220}
         minRight={400}
       />

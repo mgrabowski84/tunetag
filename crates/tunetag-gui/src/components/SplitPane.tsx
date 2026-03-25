@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 interface SplitPaneProps {
   left: React.ReactNode;
   right: React.ReactNode;
-  defaultSplit?: number; // 0-1, default 0.6
+  defaultLeftWidth?: number; // pixels, default 288 (w-72)
   minLeft?: number; // pixels
   minRight?: number; // pixels
 }
@@ -11,12 +11,12 @@ interface SplitPaneProps {
 function SplitPane({
   left,
   right,
-  defaultSplit = 0.6,
-  minLeft = 200,
-  minRight = 250,
+  defaultLeftWidth = 288,
+  minLeft = 220,
+  minRight = 400,
 }: SplitPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [split, setSplit] = useState(defaultSplit);
+  const [leftWidth, setLeftWidth] = useState(defaultLeftWidth);
   const [isDragging, setIsDragging] = useState(false);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -33,11 +33,9 @@ function SplitPane({
       const totalWidth = rect.width;
       const x = e.clientX - rect.left;
 
-      // Clamp to min sizes
-      const minSplit = minLeft / totalWidth;
-      const maxSplit = (totalWidth - minRight) / totalWidth;
-      const newSplit = Math.max(minSplit, Math.min(maxSplit, x / totalWidth));
-      setSplit(newSplit);
+      const maxLeft = totalWidth - minRight;
+      const newWidth = Math.max(minLeft, Math.min(maxLeft, x));
+      setLeftWidth(newWidth);
     }
 
     function handleMouseUp() {
@@ -58,20 +56,20 @@ function SplitPane({
       className="flex flex-1 overflow-hidden"
       style={{ cursor: isDragging ? "col-resize" : undefined }}
     >
+      {/* Left panel */}
       <div
-        className="overflow-hidden"
-        style={{ width: `${split * 100}%` }}
+        className="overflow-hidden shrink-0"
+        style={{ width: `${leftWidth}px` }}
       >
         {left}
       </div>
+      {/* Invisible drag handle — tonal separation does the visual work */}
       <div
-        className="w-1 bg-gray-300 hover:bg-blue-400 cursor-col-resize shrink-0 transition-colors"
+        className="w-1 cursor-col-resize shrink-0 hover:bg-primary/20 transition-colors"
         onMouseDown={handleMouseDown}
       />
-      <div
-        className="overflow-auto"
-        style={{ width: `${(1 - split) * 100}%` }}
-      >
+      {/* Right panel */}
+      <div className="flex-1 overflow-hidden">
         {right}
       </div>
     </div>
