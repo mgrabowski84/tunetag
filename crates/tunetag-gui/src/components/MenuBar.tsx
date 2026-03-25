@@ -20,11 +20,7 @@ interface Menu {
 
 function MenuBar() {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
-  const [pathModalOpen, setPathModalOpen] = useState(false);
-  const [pathInput, setPathInput] = useState("");
-  const [pathError, setPathError] = useState<string | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
-  const pathInputRef = useRef<HTMLInputElement>(null);
   const { state, setFiles, toggleRecursive } = useFiles();
 
   const handleOpenFiles = useCallback(async () => {
@@ -82,35 +78,6 @@ function MenuBar() {
     toggleRecursive();
   }, [toggleRecursive]);
 
-  const handleOpenPath = useCallback(() => {
-    setOpenMenu(null);
-    setPathInput("");
-    setPathError(null);
-    setPathModalOpen(true);
-    setTimeout(() => pathInputRef.current?.focus(), 50);
-  }, []);
-
-  const handlePathSubmit = useCallback(async () => {
-    const raw = pathInput.trim();
-    if (!raw) return;
-    setPathError(null);
-    try {
-      const entries = await invoke<FileEntry[]>("scan_paths", {
-        paths: [raw],
-        recursive: state.recursive,
-      });
-      if (entries.length === 0) {
-        setPathError("No supported audio files found at that path.");
-        return;
-      }
-      setFiles(entries);
-      setPathModalOpen(false);
-      setPathInput("");
-    } catch (e) {
-      setPathError(String(e));
-    }
-  }, [pathInput, state.recursive, setFiles]);
-
   // Keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -139,10 +106,6 @@ function MenuBar() {
           label: "Open Folder\u2026",
           shortcut: "Ctrl+Shift+O",
           action: handleOpenFolder,
-        },
-        {
-          label: "Open Path\u2026",
-          action: handleOpenPath,
         },
         { separator: true, label: "" },
         { label: "Save", shortcut: "Ctrl+S", disabled: true },
@@ -279,58 +242,6 @@ function MenuBar() {
         </nav>
       </div>
 
-      {/* Open Path modal */}
-      {pathModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
-          <div
-            className="bg-white rounded-lg shadow-lg w-[480px] p-5"
-            style={{ boxShadow: "0 8px 32px rgba(27, 51, 83, 0.15)" }}
-          >
-            <h2 className="text-sm font-semibold text-on-surface mb-1">
-              Open Path
-            </h2>
-            <p className="text-xs text-on-surface-variant mb-3">
-              Enter a local path or SFTP URI (e.g.{" "}
-              <span className="font-mono text-[11px]">
-                sftp://user@host/path/to/music
-              </span>
-              )
-            </p>
-            <input
-              ref={pathInputRef}
-              type="text"
-              value={pathInput}
-              onChange={(e) => {
-                setPathInput(e.target.value);
-                setPathError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handlePathSubmit();
-                if (e.key === "Escape") setPathModalOpen(false);
-              }}
-              placeholder="/path/to/music  or  sftp://user@host/path"
-              className="w-full h-8 bg-surface-container-lowest border-none ring-1 ring-outline-variant/20 text-[12px] px-2 focus:ring-2 focus:ring-primary focus:outline-none rounded-sm font-mono"
-            />
-            {pathError && (
-              <p className="text-[11px] text-red-500 mt-1">{pathError}</p>
-            )}
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                className="px-3 py-1.5 text-xs text-on-surface-variant hover:bg-slate-100 rounded"
-                onClick={() => setPathModalOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-3 py-1.5 text-xs bg-gradient-to-b from-primary to-primary-dim text-on-primary rounded shadow-sm hover:opacity-90 active:scale-[0.98] transition-all"
-                onClick={handlePathSubmit}
-              >
-                Open
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 }
