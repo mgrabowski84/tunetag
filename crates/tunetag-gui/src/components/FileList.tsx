@@ -58,7 +58,11 @@ function formatCell(col: ColumnDef, entry: FileEntry): string {
   }
 }
 
-function FileList() {
+interface FileListProps {
+  dirtyPaths?: Set<string>;
+}
+
+function FileList({ dirtyPaths = new Set() }: FileListProps) {
   const { state, setSort, selectFile } = useFiles();
   const { files, sortedIds, sort, selectedIds } = state;
 
@@ -342,6 +346,7 @@ function FileList() {
               if (!entry) return null;
 
               const isSelected = selectedIds.has(id);
+              const isDirty = dirtyPaths.has(entry.path);
               const isEven = virtualRow.index % 2 === 0;
 
               let bgClass: string;
@@ -373,6 +378,18 @@ function FileList() {
                     style={{ width: 40 }}
                   >
                     {virtualRow.index + 1}
+                  </div>
+                  {/* STAT — dirty indicator */}
+                  <div
+                    className="shrink-0 flex items-center justify-center"
+                    style={{ width: 20 }}
+                  >
+                    {isDirty && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-primary inline-block"
+                        title="Unsaved changes"
+                      />
+                    )}
                   </div>
                   {/* Data cells */}
                   {visibleColumns.map((col) => (

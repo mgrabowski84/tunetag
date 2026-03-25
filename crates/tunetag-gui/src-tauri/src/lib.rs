@@ -234,6 +234,25 @@ async fn load_column_config(app: tauri::AppHandle) -> Result<Option<ColumnConfig
     }
 }
 
+/// Shared dirty-state flag for the close prompt.
+static HAS_UNSAVED_CHANGES: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Tauri command: frontend notifies backend when dirty state changes.
+#[tauri::command]
+fn set_has_unsaved_changes(dirty: bool) {
+    HAS_UNSAVED_CHANGES.store(dirty, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Tauri command: save a batch of tag updates to disk.
+#[tauri::command]
+async fn save_tags(
+    updates: Vec<tunetag_core::TagUpdate>,
+) -> Result<tunetag_core::SaveResult, String> {
+    let result = tunetag_core::save_tags_batch(updates);
+    Ok(result)
+}
+
 /// Tauri command: save column config to the app data directory.
 #[tauri::command]
 async fn save_column_config(app: tauri::AppHandle, config: ColumnConfig) -> Result<(), String> {
@@ -261,9 +280,34 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             scan_paths,
+            save_tags,
             load_column_config,
             save_column_config,
+            set_has_unsaved_changes,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if HAS_UNSAVED_CHANGES.load(std::sync::atomic::Ordering::Relaxed) {
+                    api.prevent_close();
+                    let win = window.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let answer = tauri_plugin_dialog::DialogExt::dialog(&win)
+                            .message("You have unsaved changes. Discard and close?")
+                            .title("Unsaved Changes")
+                            .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCancelCustom(
+                                "Discard & Close".into(),
+                                "Cancel".into(),
+                            ))
+                            .blocking_show();
+                        if answer {
+                            HAS_UNSAVED_CHANGES
+                                .store(false, std::sync::atomic::Ordering::Relaxed);
+                            win.close().ok();
+                        }
+                    });
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running TuneTag");
 }

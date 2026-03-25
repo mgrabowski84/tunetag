@@ -113,3 +113,66 @@ export function formatChannels(ch: number | null): string {
   if (ch === 2) return "Stereo";
   return `${ch}ch`;
 }
+
+// ---------------------------------------------------------------------------
+// Tag editing types
+// ---------------------------------------------------------------------------
+
+/** The 9 editable tag fields. */
+export interface TagFields {
+  title: string;
+  artist: string;
+  album: string;
+  albumArtist: string;
+  year: string;
+  track: string;
+  disc: string;
+  genre: string;
+  comment: string;
+}
+
+export type TagFieldKey = keyof TagFields;
+
+/** Sentinel value shown in a field when selected files have differing values. */
+export const KEEP_PLACEHOLDER = "<keep>";
+
+/**
+ * Sparse edit state: filePath → partial tag overrides.
+ * A file is "dirty" if it has any entry in this map.
+ */
+export interface TagEditState {
+  editedTags: Map<string, Partial<TagFields>>;
+}
+
+/** A file update to send to the backend for saving. */
+export interface TagUpdate {
+  path: string;
+  /** field → value (null = clear the field, undefined/missing = don't touch) */
+  fields: Record<string, string | null>;
+}
+
+/** Result from the backend save_tags command. */
+export interface SaveResult {
+  succeeded: string[];
+  failed: SaveError[];
+}
+
+export interface SaveError {
+  path: string;
+  error: string;
+}
+
+/** Extract TagFields from a FileEntry (from loaded tags). */
+export function tagFieldsFromEntry(entry: FileEntry): TagFields {
+  return {
+    title: entry.title ?? "",
+    artist: entry.artist ?? "",
+    album: entry.album ?? "",
+    albumArtist: entry.albumArtist ?? "",
+    year: entry.year ?? "",
+    track: entry.track ?? "",
+    disc: entry.disc ?? "",
+    genre: entry.genre ?? "",
+    comment: entry.comment ?? "",
+  };
+}
