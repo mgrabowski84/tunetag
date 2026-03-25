@@ -1,8 +1,36 @@
+#[cfg(unix)]
+extern crate libc;
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 use walkdir::WalkDir;
+
+/// Translate a path string to a real filesystem path.
+/// On Linux/macOS, translates `sftp://user@host/path` → GVFS mount path.
+/// On Windows, returns the path as-is.
+fn resolve_path(raw: &str) -> PathBuf {
+    #[cfg(unix)]
+    if let Some(rest) = raw.strip_prefix("sftp://") {
+        // Parse user@host/path or host/path
+        let (userhost, path) = rest.split_once('/').unwrap_or((rest, ""));
+        let (user, host) = if let Some((u, h)) = userhost.split_once('@') {
+            (Some(u), h)
+        } else {
+            (None, userhost)
+        };
+
+        let uid = unsafe { libc::getuid() };
+        let gvfs_name = match user {
+            Some(u) => format!("sftp:host={},user={}", host, u),
+            None => format!("sftp:host={}", host),
+        };
+        let base = PathBuf::from(format!("/run/user/{}/gvfs/{}", uid, gvfs_name));
+        return if path.is_empty() { base } else { base.join(path) };
+    }
+    PathBuf::from(raw)
+}
 
 /// Supported audio file extensions (lowercase).
 const SUPPORTED_EXTENSIONS: &[&str] = &["mp3", "flac", "m4a"];
@@ -114,6 +142,12 @@ fn read_file_entry(path: &Path) -> Option<FileEntry> {
     })
 }
 
+/// Deduplicate a path — use canonicalize where possible, fall back to the raw path
+/// (canonicalize fails on GVFS/network mounts on some kernel versions).
+fn dedup_key(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// Collect all supported audio files from a list of paths.
 /// If a path is a directory, walk it (optionally recursively).
 /// If a path is a file with a supported extension, include it directly.
@@ -130,19 +164,24 @@ fn collect_audio_files(paths: &[PathBuf], recursive: bool) -> Vec<PathBuf> {
             };
             for entry in walker.into_iter().filter_map(|e| e.ok()) {
                 let p = entry.into_path();
+                // Skip Synology NAS metadata directories (@eaDir, @Recycle, #recycle, .@__thumb)
+                if p.components().any(|c| {
+                    let s = c.as_os_str().to_string_lossy();
+                    s == "@eaDir" || s == "@Recycle" || s == "#recycle" || s == ".@__thumb"
+                }) {
+                    continue;
+                }
                 if p.is_file() && is_supported_extension(&p) {
-                    if let Ok(canonical) = p.canonicalize() {
-                        if seen.insert(canonical.clone()) {
-                            result.push(canonical);
-                        }
+                    let key = dedup_key(&p);
+                    if seen.insert(key) {
+                        result.push(p);
                     }
                 }
             }
         } else if path.is_file() && is_supported_extension(path) {
-            if let Ok(canonical) = path.canonicalize() {
-                if seen.insert(canonical.clone()) {
-                    result.push(canonical);
-                }
+            let key = dedup_key(path);
+            if seen.insert(key) {
+                result.push(path.to_path_buf());
             }
         }
     }
@@ -151,9 +190,11 @@ fn collect_audio_files(paths: &[PathBuf], recursive: bool) -> Vec<PathBuf> {
 }
 
 /// Tauri command: scan paths for supported audio files and read their metadata.
+/// Accepts plain filesystem paths or sftp:// URIs (translated to local GVFS mount paths).
 #[tauri::command]
-async fn scan_paths(paths: Vec<PathBuf>, recursive: bool) -> Result<Vec<FileEntry>, String> {
-    let audio_files = collect_audio_files(&paths, recursive);
+async fn scan_paths(paths: Vec<String>, recursive: bool) -> Result<Vec<FileEntry>, String> {
+    let resolved: Vec<PathBuf> = paths.iter().map(|p| resolve_path(p)).collect();
+    let audio_files = collect_audio_files(&resolved, recursive);
 
     let entries: Vec<FileEntry> = audio_files
         .iter()

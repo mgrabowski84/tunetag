@@ -22,3 +22,6 @@ serde.workspace = true
 serde_json.workspace = true
 blake3 = "1"
 walkdir = "2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
