@@ -1,7 +1,9 @@
 #[cfg(unix)]
 extern crate libc;
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
@@ -234,6 +236,169 @@ async fn load_column_config(app: tauri::AppHandle) -> Result<Option<ColumnConfig
     }
 }
 
+// ---------------------------------------------------------------------------
+// Cover art commands
+// ---------------------------------------------------------------------------
+
+/// Cover art data returned to the frontend.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverArtData {
+    pub data: String,      // base64-encoded image bytes
+    pub mime_type: String, // "image/jpeg" or "image/png"
+}
+
+/// Multi-file cover art selection result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+pub enum CoverArtSelection {
+    /// All selected files share the same cover art.
+    #[serde(rename = "shared")]
+    Shared { art: CoverArtData },
+    /// Files have differing cover art.
+    #[serde(rename = "mixed")]
+    Mixed,
+    /// No files have cover art.
+    #[serde(rename = "none")]
+    None,
+}
+
+fn read_cover_from_path(path: &Path) -> Option<tunetag_core::CoverArt> {
+    tunetag_core::read_tags(path)
+        .ok()
+        .and_then(|t| t.cover_art)
+}
+
+fn cover_art_to_data(cover: &tunetag_core::CoverArt) -> CoverArtData {
+    let mime_type = match cover.format {
+        tunetag_core::CoverArtFormat::Jpeg => "image/jpeg",
+        tunetag_core::CoverArtFormat::Png => "image/png",
+    }
+    .to_string();
+    let data = base64::engine::general_purpose::STANDARD.encode(&cover.data);
+    CoverArtData { data, mime_type }
+}
+
+/// Tauri command: get cover art for a single file.
+#[tauri::command]
+async fn get_cover_art(path: String) -> Result<Option<CoverArtData>, String> {
+    let p = Path::new(&path);
+    let cover = read_cover_from_path(p);
+    Ok(cover.as_ref().map(cover_art_to_data))
+}
+
+/// Tauri command: get cover art for a multi-file selection.
+/// Returns shared image if all files have identical art (byte-for-byte via SHA-256),
+/// or a status indicator ("mixed" / "none").
+#[tauri::command]
+async fn get_cover_art_for_selection(paths: Vec<String>) -> Result<CoverArtSelection, String> {
+    if paths.is_empty() {
+        return Ok(CoverArtSelection::None);
+    }
+
+    let mut hashes: Vec<Option<(Vec<u8>, Vec<u8>)>> = Vec::new(); // (hash, raw bytes)
+
+    for path in &paths {
+        let cover = read_cover_from_path(Path::new(path));
+        match cover {
+            Some(c) => {
+                let mut hasher = Sha256::new();
+                hasher.update(&c.data);
+                let hash = hasher.finalize().to_vec();
+                hashes.push(Some((hash, c.data)));
+            }
+            None => hashes.push(None),
+        }
+    }
+
+    let all_none = hashes.iter().all(|h| h.is_none());
+    if all_none {
+        return Ok(CoverArtSelection::None);
+    }
+
+    // Check if all hashes match
+    let first_hash = match &hashes[0] {
+        Some((h, _)) => h.clone(),
+        None => return Ok(CoverArtSelection::Mixed),
+    };
+
+    let all_same = hashes
+        .iter()
+        .all(|h| h.as_ref().map(|(hash, _)| hash == &first_hash).unwrap_or(false));
+
+    if all_same {
+        // Return the image data (read fresh for the first file to get format info)
+        let first_cover = read_cover_from_path(Path::new(&paths[0]));
+        match first_cover {
+            Some(cover) => Ok(CoverArtSelection::Shared {
+                art: cover_art_to_data(&cover),
+            }),
+            None => Ok(CoverArtSelection::None),
+        }
+    } else {
+        Ok(CoverArtSelection::Mixed)
+    }
+}
+
+/// Tauri command: embed a JPEG or PNG image file as cover art for a set of files.
+#[tauri::command]
+async fn embed_cover_art(file_paths: Vec<String>, image_path: String) -> Result<(), String> {
+    // Read and validate the image file
+    let image_bytes = std::fs::read(&image_path)
+        .map_err(|e| format!("Failed to read image: {}", e))?;
+
+    // Validate magic bytes
+    let format = if image_bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        tunetag_core::CoverArtFormat::Jpeg
+    } else if image_bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        tunetag_core::CoverArtFormat::Png
+    } else {
+        return Err("Unsupported image format. Only JPEG and PNG are supported.".into());
+    };
+
+    let cover = tunetag_core::CoverArt::new(image_bytes, format);
+
+    for file_path in &file_paths {
+        let p = Path::new(file_path);
+        // Read existing tags, set cover art, write back
+        let mut tags = tunetag_core::read_tags(p)
+            .map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
+        tags.cover_art = Some(cover.clone());
+        tunetag_core::write_tags(p, &tags, false)
+            .map_err(|e| format!("Failed to write {}: {}", file_path, e))?;
+    }
+
+    Ok(())
+}
+
+/// Tauri command: remove cover art from a set of files.
+#[tauri::command]
+async fn remove_cover_art_cmd(file_paths: Vec<String>) -> Result<Vec<String>, String> {
+    let mut failed: Vec<String> = Vec::new();
+    for file_path in &file_paths {
+        if let Err(e) = tunetag_core::remove_cover_art(Path::new(file_path)) {
+            failed.push(format!("{}: {}", file_path, e));
+        }
+    }
+    if failed.is_empty() {
+        Ok(Vec::new())
+    } else {
+        Err(failed.join("\n"))
+    }
+}
+
+/// Tauri command: export cover art from a file to a destination path.
+#[tauri::command]
+async fn export_cover_art(file_path: String, dest_path: String) -> Result<(), String> {
+    let cover = read_cover_from_path(Path::new(&file_path))
+        .ok_or_else(|| "No cover art found in file".to_string())?;
+
+    std::fs::write(&dest_path, &cover.data)
+        .map_err(|e| format!("Failed to write cover art: {}", e))?;
+
+    Ok(())
+}
+
 /// Shared dirty-state flag for the close prompt.
 static HAS_UNSAVED_CHANGES: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -284,6 +449,11 @@ pub fn run() {
             load_column_config,
             save_column_config,
             set_has_unsaved_changes,
+            get_cover_art,
+            get_cover_art_for_selection,
+            embed_cover_art,
+            remove_cover_art_cmd,
+            export_cover_art,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

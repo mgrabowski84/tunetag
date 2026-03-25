@@ -4,6 +4,7 @@ import { useTagEdit } from "../TagEditContext";
 import { tagFieldsFromEntry, KEEP_PLACEHOLDER } from "../types";
 import type { TagFieldKey } from "../types";
 import GenreCombobox from "./GenreCombobox";
+import CoverArt from "./CoverArt";
 
 const INPUT_CLASS =
   "w-full h-7 bg-surface-container-lowest border-none ring-1 ring-outline-variant/20 text-[12px] px-2 focus:ring-2 focus:ring-primary focus:outline-none rounded-sm transition-shadow disabled:opacity-60";
@@ -144,18 +145,8 @@ function TagPanel({ onSave }: TagPanelProps) {
           )}
         </div>
 
-        {/* Cover Art placeholder (cover-art change will implement this) */}
-        <div className="aspect-square w-full bg-surface-container-highest rounded border border-outline-variant/20 flex items-center justify-center overflow-hidden relative group">
-          <span className="text-xs text-on-surface-variant">No cover</span>
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-            <button className="bg-white/20 backdrop-blur-md p-2 rounded-full hover:bg-white/40 text-white text-sm">
-              +
-            </button>
-            <button className="bg-white/20 backdrop-blur-md p-2 rounded-full hover:bg-white/40 text-white text-sm">
-              &times;
-            </button>
-          </div>
-        </div>
+        {/* Cover Art */}
+        <CoverArt selectedPaths={selectedPaths} />
 
         {/* Tag Fields */}
         <div className="space-y-2.5">

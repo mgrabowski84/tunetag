@@ -115,6 +115,20 @@ export function formatChannels(ch: number | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// Cover art types
+// ---------------------------------------------------------------------------
+
+export interface CoverArtData {
+  data: string;     // base64
+  mimeType: string; // "image/jpeg" | "image/png"
+}
+
+export type CoverArtSelection =
+  | { status: "shared"; art: CoverArtData }
+  | { status: "mixed" }
+  | { status: "none" };
+
+// ---------------------------------------------------------------------------
 // Tag editing types
 // ---------------------------------------------------------------------------
 
