@@ -15,3 +15,7 @@ tunetag-core = { path = "../tunetag-core" }
 clap = { version = "4", features = ["derive"] }
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+tunetag-core = { path = "../tunetag-core" }
+serde_json.workspace = true

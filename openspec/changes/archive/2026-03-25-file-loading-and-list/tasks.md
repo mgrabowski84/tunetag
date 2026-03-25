@@ -49,8 +49,8 @@
 
 ## 8. Testing & Verification
 
-- [ ] 8.1 Test loading a folder with 1,000+ files — verify all files appear and scrolling is smooth
-- [ ] 8.2 Test drag-and-drop with mixed file types — verify only supported formats are loaded
-- [ ] 8.3 Test column sorting, customization, reorder, and persistence across app restart
-- [ ] 8.4 Test recursive vs non-recursive folder scanning
-- [ ] 8.5 Test with files that have missing tags and corrupted files
+- [x] 8.1 Test loading a folder with 1,000+ files — verify all files appear and scrolling is smooth
+- [x] 8.2 Test drag-and-drop with mixed file types — verify only supported formats are loaded
+- [x] 8.3 Test column sorting, customization, reorder, and persistence across app restart
+- [x] 8.4 Test recursive vs non-recursive folder scanning
+- [x] 8.5 Test with files that have missing tags and corrupted files

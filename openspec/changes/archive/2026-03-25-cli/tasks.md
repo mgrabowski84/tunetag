@@ -33,10 +33,10 @@
 
 ## 7. Integration Testing
 
-- [ ] 7.1 Add integration tests for `read` and `info` subcommands with real audio fixture files (MP3, FLAC, M4A)
-- [ ] 7.2 Add integration tests for `write` and `write --dry-run` verifying tags are written/not-written and diff output matches expected format
-- [ ] 7.3 Add integration tests for `rename` and `rename --dry-run` verifying files are renamed/not-renamed, collision detection works, and dry-run output is correct
-- [ ] 7.4 Add integration tests for `cover set` and `cover remove` verifying cover art embedding/removal
-- [ ] 7.5 Add integration tests for `autonumber` verifying sequential numbering, `--start`, `--total`, `--disc`, `--sort`, and `--no-write-total` flags
-- [ ] 7.6 Add integration tests for exit codes: 0 (success), 1 (partial failure), 2 (fatal error) across batch operations
-- [ ] 7.7 Add integration tests for `--json` output format across all subcommands that support it
+- [x] 7.1 Add integration tests for `read` and `info` subcommands with real audio fixture files (MP3, FLAC, M4A)
+- [x] 7.2 Add integration tests for `write` and `write --dry-run` verifying tags are written/not-written and diff output matches expected format
+- [x] 7.3 Add integration tests for `rename` and `rename --dry-run` verifying files are renamed/not-renamed, collision detection works, and dry-run output is correct
+- [x] 7.4 Add integration tests for `cover set` and `cover remove` verifying cover art embedding/removal
+- [x] 7.5 Add integration tests for `autonumber` verifying sequential numbering, `--start`, `--total`, `--disc`, `--sort`, and `--no-write-total` flags
+- [x] 7.6 Add integration tests for exit codes: 0 (success), 1 (partial failure), 2 (fatal error) across batch operations
+- [x] 7.7 Add integration tests for `--json` output format across all subcommands that support it
