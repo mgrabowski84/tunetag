@@ -34,4 +34,4 @@
 - [x] 5.2 Configure Rust toolchain caching and Node.js setup in CI
 - [x] 5.3 Add `cargo build --workspace`, `cargo test --workspace`, and `cargo clippy --workspace` steps
 - [x] 5.4 Add frontend lint step (`npm run lint` or equivalent)
-- [ ] 5.5 Verify CI passes on push to main
+- [x] 5.5 Verify CI passes on push to main

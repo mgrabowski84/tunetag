@@ -59,7 +59,7 @@ function SplitPane({
       style={{ cursor: isDragging ? "col-resize" : undefined }}
     >
       <div
-        className="overflow-auto"
+        className="overflow-hidden"
         style={{ width: `${split * 100}%` }}
       >
         {left}

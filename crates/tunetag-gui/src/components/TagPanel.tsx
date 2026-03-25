@@ -12,9 +12,15 @@ function TagPanel() {
   ];
 
   return (
-    <div className="h-full flex flex-col p-3 bg-gray-50">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">Tag Panel</h2>
-      <div className="flex-1 space-y-2">
+    <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
+      {/* Cover art - fixed height at top */}
+      <div className="shrink-0 p-3 pb-2">
+        <div className="w-full h-32 bg-gray-200 rounded border border-gray-300 flex items-center justify-center text-gray-400 text-xs">
+          No cover
+        </div>
+      </div>
+      {/* Tag fields - scrollable area */}
+      <div className="flex-1 overflow-y-auto px-3 space-y-1.5 min-h-0">
         {fields.map((field) => (
           <div key={field}>
             <label className="block text-xs text-gray-500 mb-0.5">
@@ -22,7 +28,7 @@ function TagPanel() {
             </label>
             {field === "Comment" ? (
               <textarea
-                className="w-full px-2 py-1 text-sm border border-gray-300 rounded bg-white resize-none h-16"
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded bg-white resize-none h-14"
                 disabled
                 placeholder="No file selected"
               />
@@ -37,20 +43,15 @@ function TagPanel() {
           </div>
         ))}
       </div>
-      {/* Cover art placeholder */}
-      <div className="mt-3">
-        <label className="block text-xs text-gray-500 mb-1">Cover Art</label>
-        <div className="w-full aspect-square bg-gray-200 rounded border border-gray-300 flex items-center justify-center text-gray-400 text-xs">
-          No cover
-        </div>
+      {/* Save button - pinned at bottom */}
+      <div className="shrink-0 p-3 pt-2">
+        <button
+          className="w-full py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled
+        >
+          Save
+        </button>
       </div>
-      {/* Save button */}
-      <button
-        className="mt-3 w-full py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-        disabled
-      >
-        Save
-      </button>
     </div>
   );
 }

@@ -9,9 +9,11 @@ function App() {
     <div className="h-screen flex flex-col bg-white text-gray-900">
       <MenuBar />
       <SplitPane
-        left={<FileList />}
-        right={<TagPanel />}
-        defaultSplit={0.6}
+        left={<TagPanel />}
+        right={<FileList />}
+        defaultSplit={0.25}
+        minLeft={220}
+        minRight={400}
       />
       <StatusBar filesLoaded={0} filesSelected={0} filesUnsaved={0} />
     </div>
