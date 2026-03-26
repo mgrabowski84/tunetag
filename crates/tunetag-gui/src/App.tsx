@@ -7,6 +7,7 @@ import StatusBar from "./components/StatusBar";
 import FileList from "./components/FileList";
 import TagPanel from "./components/TagPanel";
 import RenameDialog from "./components/RenameDialog";
+import AutoNumberDialog from "./components/AutoNumberDialog";
 import { FilesProvider, useFiles } from "./FilesContext";
 import { TagEditProvider, useTagEdit } from "./TagEditContext";
 import type { FileEntry, TagUpdate, SaveResult } from "./types";
@@ -94,6 +95,7 @@ function SaveErrorDialog({ result, total, onClose }: SaveErrorDialogProps) {
 function AppInner() {
   const { state: filesState, setFiles, updatePaths } = useFiles();
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showAutoNumberDialog, setShowAutoNumberDialog] = useState(false);
   const {
     state: editState,
     clearEdits,
@@ -252,6 +254,7 @@ function AppInner() {
         onCloseAll={clearAllEdits}
         hasSelection={filesState.selectedIds.size > 0}
         onRenameFromTags={() => setShowRenameDialog(true)}
+        onAutoNumber={() => setShowAutoNumberDialog(true)}
       />
       <SplitPane
         left={<TagPanel onSave={handleSave} />}
@@ -265,6 +268,23 @@ function AppInner() {
         filesSelected={filesState.selectedIds.size}
         filesUnsaved={dirtyCount}
       />
+
+      {/* Auto-number dialog */}
+      {showAutoNumberDialog && (
+        <AutoNumberDialog
+          selectedEntries={Array.from(filesState.selectedIds)
+            .map((id) => filesState.files.get(id))
+            .filter((e): e is NonNullable<typeof e> => e != null)
+            .map((e) => ({
+              id: e.id,
+              path: e.path,
+              filename: e.filename,
+              track: e.track,
+              disc: e.disc,
+            }))}
+          onClose={() => setShowAutoNumberDialog(false)}
+        />
+      )}
 
       {/* Rename dialog */}
       {showRenameDialog && (

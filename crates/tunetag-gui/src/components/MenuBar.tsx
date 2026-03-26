@@ -28,6 +28,7 @@ interface MenuBarProps {
   onCloseAll?: () => void;
   hasSelection?: boolean;
   onRenameFromTags?: () => void;
+  onAutoNumber?: () => void;
 }
 
 function MenuBar({
@@ -40,6 +41,7 @@ function MenuBar({
   onCloseAll,
   hasSelection = false,
   onRenameFromTags,
+  onAutoNumber,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
@@ -170,7 +172,11 @@ function MenuBar({
           disabled: !hasSelection,
           action: hasSelection ? () => { setOpenMenu(null); onRenameFromTags?.(); } : undefined,
         },
-        { label: "Auto-number Tracks\u2026", disabled: true },
+        {
+          label: "Auto-number Tracks\u2026",
+          disabled: !hasSelection,
+          action: hasSelection ? () => { setOpenMenu(null); onAutoNumber?.(); } : undefined,
+        },
       ],
     },
     {
