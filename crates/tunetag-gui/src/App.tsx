@@ -95,9 +95,16 @@ function AppInner() {
   const {
     state: editState,
     clearEdits,
+    clearAllEdits,
     isDirty,
     dirtyCount,
     dirtyPaths,
+    canUndo,
+    canRedo,
+    undoLabel,
+    redoLabel,
+    undo,
+    redo,
   } = useTagEdit();
 
   const [saveErrorResult, setSaveErrorResult] = useState<{
@@ -168,18 +175,28 @@ function AppInner() {
   }, [filesState, editState.editedTags, clearEdits]);
 
   // -------------------------------------------------------------------------
-  // Ctrl/Cmd+S keyboard shortcut
+  // Keyboard shortcuts: Ctrl+S (save), Ctrl+Z (undo), Ctrl+Shift+Z / Ctrl+Y (redo)
   // -------------------------------------------------------------------------
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && e.key === "s") {
         e.preventDefault();
         handleSave();
+      } else if (ctrl && !e.shiftKey && e.key === "z") {
+        e.preventDefault();
+        if (canUndo) undo();
+      } else if (
+        (ctrl && e.shiftKey && e.key === "z") ||
+        (ctrl && e.key === "y")
+      ) {
+        e.preventDefault();
+        if (canRedo) redo();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave]);
+  }, [handleSave, canUndo, canRedo, undo, redo]);
 
   // -------------------------------------------------------------------------
   // Drag and drop
@@ -223,7 +240,15 @@ function AppInner() {
 
   return (
     <div className="h-screen flex flex-col bg-surface text-on-surface overflow-hidden">
-      <MenuBar />
+      <MenuBar
+        canUndo={canUndo}
+        canRedo={canRedo}
+        undoLabel={undoLabel}
+        redoLabel={redoLabel}
+        onUndo={undo}
+        onRedo={redo}
+        onCloseAll={clearAllEdits}
+      />
       <SplitPane
         left={<TagPanel onSave={handleSave} />}
         right={<FileList dirtyPaths={dirtyPaths} />}

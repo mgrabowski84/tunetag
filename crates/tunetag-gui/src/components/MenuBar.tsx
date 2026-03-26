@@ -18,7 +18,25 @@ interface Menu {
   items: MenuItem[];
 }
 
-function MenuBar() {
+interface MenuBarProps {
+  canUndo?: boolean;
+  canRedo?: boolean;
+  undoLabel?: string | null;
+  redoLabel?: string | null;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onCloseAll?: () => void;
+}
+
+function MenuBar({
+  canUndo = false,
+  canRedo = false,
+  undoLabel = null,
+  redoLabel = null,
+  onUndo,
+  onRedo,
+  onCloseAll,
+}: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const { state, setFiles, toggleRecursive } = useFiles();
@@ -46,10 +64,11 @@ function MenuBar() {
         recursive: false,
       });
       setFiles(entries);
+      onCloseAll?.(); // clear undo stack on new file load
     } catch {
       // User cancelled or error — do nothing
     }
-  }, [setFiles]);
+  }, [setFiles, onCloseAll]);
 
   const handleOpenFolder = useCallback(async () => {
     setOpenMenu(null);
@@ -68,10 +87,11 @@ function MenuBar() {
         recursive: state.recursive,
       });
       setFiles(entries);
+      onCloseAll?.(); // clear undo stack on new folder load
     } catch {
       // User cancelled or error — do nothing
     }
-  }, [state.recursive, setFiles]);
+  }, [state.recursive, setFiles, onCloseAll]);
 
   const handleToggleRecursive = useCallback(() => {
     setOpenMenu(null);
@@ -110,14 +130,30 @@ function MenuBar() {
         { separator: true, label: "" },
         { label: "Save", shortcut: "Ctrl+S", disabled: true },
         { separator: true, label: "" },
-        { label: "Close All", disabled: true },
+        {
+          label: "Close All",
+          action: () => {
+            setOpenMenu(null);
+            onCloseAll?.();
+          },
+        },
       ],
     },
     {
       label: "Edit",
       items: [
-        { label: "Undo", shortcut: "Ctrl+Z", disabled: true },
-        { label: "Redo", shortcut: "Ctrl+Shift+Z", disabled: true },
+        {
+          label: undoLabel ? `Undo ${undoLabel}` : "Undo",
+          shortcut: "Ctrl+Z",
+          disabled: !canUndo,
+          action: () => { setOpenMenu(null); onUndo?.(); },
+        },
+        {
+          label: redoLabel ? `Redo ${redoLabel}` : "Redo",
+          shortcut: "Ctrl+Shift+Z",
+          disabled: !canRedo,
+          action: () => { setOpenMenu(null); onRedo?.(); },
+        },
         { separator: true, label: "" },
         { label: "Select All", shortcut: "Ctrl+A", disabled: true },
       ],
