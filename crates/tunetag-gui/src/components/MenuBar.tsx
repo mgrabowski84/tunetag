@@ -26,6 +26,8 @@ interface MenuBarProps {
   onUndo?: () => void;
   onRedo?: () => void;
   onCloseAll?: () => void;
+  hasSelection?: boolean;
+  onRenameFromTags?: () => void;
 }
 
 function MenuBar({
@@ -36,6 +38,8 @@ function MenuBar({
   onUndo,
   onRedo,
   onCloseAll,
+  hasSelection = false,
+  onRenameFromTags,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
@@ -161,7 +165,11 @@ function MenuBar({
     {
       label: "Convert",
       items: [
-        { label: "Rename Files from Tags\u2026", disabled: true },
+        {
+          label: "Rename Files from Tags\u2026",
+          disabled: !hasSelection,
+          action: hasSelection ? () => { setOpenMenu(null); onRenameFromTags?.(); } : undefined,
+        },
         { label: "Auto-number Tracks\u2026", disabled: true },
       ],
     },

@@ -49,10 +49,7 @@ pub fn save_tags_batch(updates: Vec<TagUpdate>) -> SaveResult {
     SaveResult { succeeded, failed }
 }
 
-fn apply_update(
-    path: &Path,
-    fields: &HashMap<String, Option<String>>,
-) -> Result<(), TagError> {
+fn apply_update(path: &Path, fields: &HashMap<String, Option<String>>) -> Result<(), TagError> {
     // Read existing tags to preserve fields not in the update
     let existing = read_tags(path)?;
 

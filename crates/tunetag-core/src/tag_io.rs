@@ -51,7 +51,10 @@ pub fn read_tags(path: &Path) -> Result<TagData, TagError> {
         }
     }
 
-    let tag = match tagged_file.primary_tag().or_else(|| tagged_file.first_tag()) {
+    let tag = match tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag())
+    {
         Some(t) => t,
         None => return Ok(TagData::default()),
     };
@@ -64,11 +67,7 @@ pub fn read_tags(path: &Path) -> Result<TagData, TagError> {
 }
 
 /// Detect the tag format, including ID3v2 version for MP3 files.
-fn detect_tag_format(
-    path: &Path,
-    tag: &Tag,
-    file_type: FileType,
-) -> Result<TagFormat, TagError> {
+fn detect_tag_format(path: &Path, tag: &Tag, file_type: FileType) -> Result<TagFormat, TagError> {
     match (file_type, tag.tag_type()) {
         (FileType::Mpeg, TagType::Id3v2) => {
             // Detect ID3v2 version by reading the header bytes directly.
@@ -219,10 +218,11 @@ pub fn write_tags(path: &Path, tags: &TagData, force_id3v2_4: bool) -> Result<()
     // Build write options with ID3 version preservation
     let write_options = build_write_options(tags.format, force_id3v2_4);
 
-    tag.save_to_path(path, write_options).map_err(|e| TagError::WriteError {
-        path: path.to_path_buf(),
-        source: e.into(),
-    })?;
+    tag.save_to_path(path, write_options)
+        .map_err(|e| TagError::WriteError {
+            path: path.to_path_buf(),
+            source: e.into(),
+        })?;
 
     Ok(())
 }
@@ -282,7 +282,12 @@ fn write_cover_art(tag: &mut Tag, cover: &CoverArt) {
         CoverArtFormat::Png => MimeType::Png,
     };
 
-    let pic = Picture::new_unchecked(PictureType::CoverFront, Some(mime), None, cover.data.clone());
+    let pic = Picture::new_unchecked(
+        PictureType::CoverFront,
+        Some(mime),
+        None,
+        cover.data.clone(),
+    );
     tag.push_picture(pic);
 }
 
@@ -319,10 +324,11 @@ pub fn remove_cover_art(path: &Path) -> Result<(), TagError> {
         }
 
         let write_options = WriteOptions::new();
-        tag.save_to_path(path, write_options).map_err(|e| TagError::WriteError {
-            path: path.to_path_buf(),
-            source: e.into(),
-        })?;
+        tag.save_to_path(path, write_options)
+            .map_err(|e| TagError::WriteError {
+                path: path.to_path_buf(),
+                source: e.into(),
+            })?;
     }
 
     Ok(())

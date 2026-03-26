@@ -409,6 +409,82 @@ fn set_has_unsaved_changes(dirty: bool) {
     HAS_UNSAVED_CHANGES.store(dirty, std::sync::atomic::Ordering::Relaxed);
 }
 
+// ---------------------------------------------------------------------------
+// Rename commands
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamePreviewRow {
+    pub original_path: String,
+    pub original_name: String,
+    pub new_name: String,
+    pub is_noop: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamePreviewResponse {
+    pub rows: Vec<RenamePreviewRow>,
+    pub collisions: Vec<String>,
+    pub permission_errors: Vec<String>,
+}
+
+#[tauri::command]
+async fn rename_preview_single(file_path: String, format: String) -> Result<String, String> {
+    use tunetag_core::rename::{parse_format, resolve_filename, tag_map};
+    use tunetag_core::read_tags;
+    let path = std::path::Path::new(&file_path);
+    let tags = read_tags(path).unwrap_or_default();
+    let tag_values = tag_map(&tags);
+    let segments = parse_format(&format);
+    Ok(resolve_filename(path, &segments, &tag_values))
+}
+
+#[tauri::command]
+async fn rename_preview(
+    file_paths: Vec<String>,
+    format: String,
+) -> Result<RenamePreviewResponse, String> {
+    let paths: Vec<std::path::PathBuf> = file_paths
+        .iter()
+        .map(std::path::PathBuf::from)
+        .collect();
+    let preview = tunetag_core::plan_renames(&paths, &format);
+    let rows = preview
+        .mappings
+        .iter()
+        .map(|m| RenamePreviewRow {
+            original_name: m
+                .original_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            new_name: m.new_filename.clone(),
+            original_path: m.original_path.to_string_lossy().to_string(),
+            is_noop: m.is_noop,
+        })
+        .collect();
+    Ok(RenamePreviewResponse {
+        rows,
+        collisions: preview.collisions,
+        permission_errors: preview.permission_errors,
+    })
+}
+
+#[tauri::command]
+async fn rename_execute(
+    file_paths: Vec<String>,
+    format: String,
+) -> Result<Vec<tunetag_core::RenameResult>, String> {
+    let paths: Vec<std::path::PathBuf> = file_paths
+        .iter()
+        .map(std::path::PathBuf::from)
+        .collect();
+    Ok(tunetag_core::execute_renames(&paths, &format))
+}
+
 /// Tauri command: save a batch of tag updates to disk.
 #[tauri::command]
 async fn save_tags(
@@ -454,6 +530,9 @@ pub fn run() {
             embed_cover_art,
             remove_cover_art_cmd,
             export_cover_art,
+            rename_preview_single,
+            rename_preview,
+            rename_execute,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

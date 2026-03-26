@@ -6,6 +6,7 @@ import SplitPane from "./components/SplitPane";
 import StatusBar from "./components/StatusBar";
 import FileList from "./components/FileList";
 import TagPanel from "./components/TagPanel";
+import RenameDialog from "./components/RenameDialog";
 import { FilesProvider, useFiles } from "./FilesContext";
 import { TagEditProvider, useTagEdit } from "./TagEditContext";
 import type { FileEntry, TagUpdate, SaveResult } from "./types";
@@ -91,7 +92,8 @@ function SaveErrorDialog({ result, total, onClose }: SaveErrorDialogProps) {
 // ---------------------------------------------------------------------------
 
 function AppInner() {
-  const { state: filesState, setFiles } = useFiles();
+  const { state: filesState, setFiles, updatePaths } = useFiles();
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
   const {
     state: editState,
     clearEdits,
@@ -248,6 +250,8 @@ function AppInner() {
         onUndo={undo}
         onRedo={redo}
         onCloseAll={clearAllEdits}
+        hasSelection={filesState.selectedIds.size > 0}
+        onRenameFromTags={() => setShowRenameDialog(true)}
       />
       <SplitPane
         left={<TagPanel onSave={handleSave} />}
@@ -261,6 +265,20 @@ function AppInner() {
         filesSelected={filesState.selectedIds.size}
         filesUnsaved={dirtyCount}
       />
+
+      {/* Rename dialog */}
+      {showRenameDialog && (
+        <RenameDialog
+          selectedPaths={Array.from(filesState.selectedIds)
+            .map((id) => filesState.files.get(id)?.path)
+            .filter((p): p is string => p != null)}
+          onClose={() => setShowRenameDialog(false)}
+          onRenamed={(mapping) => {
+            updatePaths(mapping);
+            setShowRenameDialog(false);
+          }}
+        />
+      )}
 
       {/* Save error dialog */}
       {saveErrorResult && (

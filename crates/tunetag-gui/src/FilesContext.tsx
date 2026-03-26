@@ -42,7 +42,8 @@ type FilesAction =
   | { type: "SELECT"; payload: { id: string; ctrl: boolean; shift: boolean } }
   | { type: "SELECT_ALL" }
   | { type: "CLEAR_SELECTION" }
-  | { type: "TOGGLE_RECURSIVE" };
+  | { type: "TOGGLE_RECURSIVE" }
+  | { type: "UPDATE_PATHS"; payload: Record<string, string> }; // oldPath → newPath
 
 // ---------------------------------------------------------------------------
 // Sorting helper
@@ -161,6 +162,23 @@ function filesReducer(state: FilesState, action: FilesAction): FilesState {
       return { ...state, recursive: !state.recursive };
     }
 
+    case "UPDATE_PATHS": {
+      // Update file entries after rename: oldPath → newPath
+      const mapping = action.payload;
+      const next = new Map(state.files);
+      for (const [oldPath, newPath] of Object.entries(mapping)) {
+        // Find the entry by path
+        for (const [id, entry] of next) {
+          if (entry.path === oldPath) {
+            const newFilename = newPath.split("/").pop() ?? entry.filename;
+            next.set(id, { ...entry, path: newPath, filename: newFilename });
+            break;
+          }
+        }
+      }
+      return { ...state, files: next };
+    }
+
     default:
       return state;
   }
@@ -178,6 +196,7 @@ interface FilesContextValue {
   selectAll: () => void;
   clearSelection: () => void;
   toggleRecursive: () => void;
+  updatePaths: (mapping: Record<string, string>) => void;
 }
 
 const FilesContext = createContext<FilesContextValue | null>(null);
@@ -216,6 +235,12 @@ export function FilesProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const updatePaths = useCallback(
+    (mapping: Record<string, string>) =>
+      dispatch({ type: "UPDATE_PATHS", payload: mapping }),
+    [],
+  );
+
   return (
     <FilesContext.Provider
       value={{
@@ -226,6 +251,7 @@ export function FilesProvider({ children }: { children: ReactNode }) {
         selectAll,
         clearSelection,
         toggleRecursive,
+        updatePaths,
       }}
     >
       {children}

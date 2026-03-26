@@ -5,10 +5,7 @@ use std::path::PathBuf;
 #[derive(Debug)]
 pub enum TagError {
     /// The file format is not supported (not MP3, FLAC, or M4A).
-    UnsupportedFormat {
-        path: PathBuf,
-        detail: String,
-    },
+    UnsupportedFormat { path: PathBuf, detail: String },
     /// The file was not found at the given path.
     FileNotFound(PathBuf),
     /// An error occurred while reading tags or audio properties.
