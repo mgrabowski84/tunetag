@@ -410,6 +410,37 @@ fn set_has_unsaved_changes(dirty: bool) {
 }
 
 // ---------------------------------------------------------------------------
+// Refresh command
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshResult {
+    pub updated: Vec<FileEntry>,
+    pub deleted: Vec<String>,
+}
+
+#[tauri::command]
+async fn refresh_files(paths: Vec<String>) -> Result<RefreshResult, String> {
+    let mut updated = Vec::new();
+    let mut deleted = Vec::new();
+
+    for path_str in &paths {
+        let path = std::path::Path::new(path_str);
+        if !path.exists() {
+            deleted.push(path_str.clone());
+            continue;
+        }
+        match read_file_entry(path) {
+            Some(entry) => updated.push(entry),
+            None => deleted.push(path_str.clone()),
+        }
+    }
+
+    Ok(RefreshResult { updated, deleted })
+}
+
+// ---------------------------------------------------------------------------
 // Rename commands
 // ---------------------------------------------------------------------------
 
@@ -533,6 +564,7 @@ pub fn run() {
             rename_preview_single,
             rename_preview,
             rename_execute,
+            refresh_files,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

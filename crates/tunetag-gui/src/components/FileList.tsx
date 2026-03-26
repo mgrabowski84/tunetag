@@ -60,11 +60,21 @@ function formatCell(col: ColumnDef, entry: FileEntry): string {
 
 interface FileListProps {
   dirtyPaths?: Set<string>;
+  /** Ref to the Title input in TagPanel for Enter-to-edit focus */
+  titleInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
-function FileList({ dirtyPaths = new Set() }: FileListProps) {
+function FileList({ dirtyPaths = new Set(), titleInputRef }: FileListProps) {
   const { state, setSort, selectFile } = useFiles();
   const { files, sortedIds, sort, selectedIds } = state;
+
+  // Keyboard nav state
+  const [cursorIndex, setCursorIndex] = useState<number>(-1);
+  const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
+  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  // Type-to-jump
+  const prefixRef = useRef<string>("");
+  const prefixTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const parentRef = useRef<HTMLDivElement>(null);
   const [columnSettings, setColumnSettings] = useState<ColumnSetting[]>(
@@ -139,11 +149,132 @@ function FileList({ dirtyPaths = new Set() }: FileListProps) {
   );
 
   const handleRowClick = useCallback(
-    (id: string, e: React.MouseEvent) => {
+    (id: string, idx: number, e: React.MouseEvent) => {
       selectFile(id, e.ctrlKey || e.metaKey, e.shiftKey);
+      setCursorIndex(idx);
+      if (!e.shiftKey) setAnchorIndex(idx);
     },
     [selectFile],
   );
+
+  // Scroll cursor row into view
+  const scrollCursorIntoView = useCallback((idx: number) => {
+    const el = rowRefs.current.get(idx);
+    el?.scrollIntoView({ block: "nearest" });
+  }, []);
+
+  // Move cursor and select, then scroll
+  const moveCursor = useCallback(
+    (newIdx: number, shift: boolean) => {
+      const clamped = Math.max(0, Math.min(sortedIds.length - 1, newIdx));
+      if (shift) {
+        const anchor = anchorIndex ?? cursorIndex;
+        const lo = Math.min(anchor, clamped);
+        const hi = Math.max(anchor, clamped);
+        // Select the range
+        for (let i = lo; i <= hi; i++) {
+          const id = sortedIds[i];
+          if (id) selectFile(id, i > lo, false);
+        }
+        setCursorIndex(clamped);
+      } else {
+        const id = sortedIds[clamped];
+        if (id) {
+          selectFile(id, false, false);
+          setAnchorIndex(clamped);
+        }
+        setCursorIndex(clamped);
+      }
+      scrollCursorIntoView(clamped);
+    },
+    [sortedIds, cursorIndex, anchorIndex, selectFile, scrollCursorIntoView],
+  );
+
+  // Keyboard handler for the file list container
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (sortedIds.length === 0) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          moveCursor(cursorIndex < 0 ? 0 : cursorIndex + 1, e.shiftKey);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          moveCursor(cursorIndex < 0 ? 0 : cursorIndex - 1, e.shiftKey);
+          break;
+        case "Home":
+          e.preventDefault();
+          moveCursor(0, e.shiftKey);
+          break;
+        case "End":
+          e.preventDefault();
+          moveCursor(sortedIds.length - 1, e.shiftKey);
+          break;
+        case "PageDown": {
+          e.preventDefault();
+          const pageSize = parentRef.current
+            ? Math.floor(parentRef.current.clientHeight / ROW_HEIGHT)
+            : 10;
+          moveCursor(cursorIndex + pageSize, e.shiftKey);
+          break;
+        }
+        case "PageUp": {
+          e.preventDefault();
+          const pageSize = parentRef.current
+            ? Math.floor(parentRef.current.clientHeight / ROW_HEIGHT)
+            : 10;
+          moveCursor(cursorIndex - pageSize, e.shiftKey);
+          break;
+        }
+        case "Enter":
+          e.preventDefault();
+          if (selectedIds.size > 0) {
+            titleInputRef?.current?.focus();
+          }
+          break;
+        case "Tab":
+          e.preventDefault();
+          titleInputRef?.current?.focus();
+          break;
+        default: {
+          // Type-to-jump: printable characters, no modifiers
+          if (
+            e.key.length === 1 &&
+            !ctrl &&
+            !e.altKey
+          ) {
+            e.preventDefault();
+            prefixRef.current += e.key.toLowerCase();
+            if (prefixTimeoutRef.current) clearTimeout(prefixTimeoutRef.current);
+            prefixTimeoutRef.current = setTimeout(() => {
+              prefixRef.current = "";
+            }, 1000);
+
+            const prefix = prefixRef.current;
+            const matchIdx = sortedIds.findIndex((id) => {
+              const entry = files.get(id);
+              return entry?.filename.toLowerCase().startsWith(prefix);
+            });
+            if (matchIdx >= 0) {
+              moveCursor(matchIdx, false);
+            }
+          }
+        }
+      }
+    },
+    [sortedIds, cursorIndex, anchorIndex, selectedIds, moveCursor, titleInputRef, files],
+  );
+
+  // Attach keyboard listener to container when focused
+  useEffect(() => {
+    const el = parentRef.current;
+    if (!el) return;
+    el.addEventListener("keydown", handleKeyDown);
+    return () => el.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
@@ -331,7 +462,8 @@ function FileList({ dirtyPaths = new Set() }: FileListProps) {
       ) : (
         <div
           ref={parentRef}
-          className="flex-1 overflow-auto"
+          className="flex-1 overflow-auto outline-none"
+          tabIndex={0}
         >
           <div
             style={{
@@ -348,6 +480,7 @@ function FileList({ dirtyPaths = new Set() }: FileListProps) {
               const isSelected = selectedIds.has(id);
               const isDirty = dirtyPaths.has(entry.path);
               const isEven = virtualRow.index % 2 === 0;
+              const isCursor = virtualRow.index === cursorIndex;
 
               let bgClass: string;
               if (isSelected) {
@@ -361,7 +494,11 @@ function FileList({ dirtyPaths = new Set() }: FileListProps) {
               return (
                 <div
                   key={id}
-                  className={`flex items-center cursor-default ${bgClass} hover:brightness-[0.97]`}
+                  ref={(el) => {
+                    if (el) rowRefs.current.set(virtualRow.index, el);
+                    else rowRefs.current.delete(virtualRow.index);
+                  }}
+                  className={`flex items-center cursor-default ${bgClass} hover:brightness-[0.97] ${isCursor ? "outline outline-1 outline-primary/40" : ""}`}
                   style={{
                     position: "absolute",
                     top: 0,
@@ -370,7 +507,7 @@ function FileList({ dirtyPaths = new Set() }: FileListProps) {
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
-                  onClick={(e) => handleRowClick(id, e)}
+                  onClick={(e) => handleRowClick(id, virtualRow.index, e)}
                 >
                   {/* Row number */}
                   <div

@@ -29,6 +29,7 @@ interface MenuBarProps {
   hasSelection?: boolean;
   onRenameFromTags?: () => void;
   onAutoNumber?: () => void;
+  onRefresh?: () => void;
 }
 
 function MenuBar({
@@ -42,6 +43,7 @@ function MenuBar({
   hasSelection = false,
   onRenameFromTags,
   onAutoNumber,
+  onRefresh,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
@@ -192,7 +194,11 @@ function MenuBar({
           action: handleToggleRecursive,
         },
         { separator: true, label: "" },
-        { label: "Refresh", shortcut: "F5", disabled: true },
+        {
+          label: "Refresh",
+          shortcut: "F5",
+          action: () => { setOpenMenu(null); onRefresh?.(); },
+        },
       ],
     },
   ];

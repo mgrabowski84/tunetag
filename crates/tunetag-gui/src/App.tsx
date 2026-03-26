@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import MenuBar from "./components/MenuBar";
@@ -96,6 +96,7 @@ function AppInner() {
   const { state: filesState, setFiles, updatePaths } = useFiles();
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showAutoNumberDialog, setShowAutoNumberDialog] = useState(false);
+  const fileListRef = useRef<HTMLDivElement | null>(null);
   const {
     state: editState,
     clearEdits,
@@ -242,6 +243,47 @@ function AppInner() {
     };
   }, [loadDroppedPaths]);
 
+  // -------------------------------------------------------------------------
+  // Refresh handler (F5 / View → Refresh)
+  // -------------------------------------------------------------------------
+  const handleRefresh = useCallback(async () => {
+    if (filesState.files.size === 0) return;
+
+    if (isDirty) {
+      const confirmed = window.confirm(
+        `You have unsaved changes in ${dirtyCount} file${dirtyCount !== 1 ? "s" : ""}. Refresh will discard them. Continue?`,
+      );
+      if (!confirmed) return;
+    }
+
+    const paths = Array.from(filesState.files.values()).map((f) => f.path);
+    try {
+      const result = await invoke<{
+        updated: typeof filesState.files extends Map<string, infer V> ? V[] : never;
+        deleted: string[];
+      }>("refresh_files", { paths });
+
+      // Re-build files from updated
+      setFiles(result.updated as Parameters<typeof setFiles>[0]);
+      clearAllEdits();
+      fileListRef.current?.focus();
+    } catch {
+      // Silently ignore refresh errors
+    }
+  }, [filesState.files, isDirty, dirtyCount, setFiles, clearAllEdits]);
+
+  // F5 keyboard shortcut for refresh
+  useEffect(() => {
+    function handleF5(e: KeyboardEvent) {
+      if (e.key === "F5") {
+        e.preventDefault();
+        handleRefresh();
+      }
+    }
+    document.addEventListener("keydown", handleF5);
+    return () => document.removeEventListener("keydown", handleF5);
+  }, [handleRefresh]);
+
   return (
     <div className="h-screen flex flex-col bg-surface text-on-surface overflow-hidden">
       <MenuBar
@@ -255,6 +297,7 @@ function AppInner() {
         hasSelection={filesState.selectedIds.size > 0}
         onRenameFromTags={() => setShowRenameDialog(true)}
         onAutoNumber={() => setShowAutoNumberDialog(true)}
+        onRefresh={handleRefresh}
       />
       <SplitPane
         left={<TagPanel onSave={handleSave} />}
