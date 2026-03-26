@@ -1,7 +1,10 @@
 #[cfg(unix)]
 extern crate libc;
 
+mod musicbrainz;
+
 use base64::Engine as _;
+use musicbrainz::{MusicBrainzClient, ReleaseDetailDto, SearchResultDto};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
@@ -545,9 +548,42 @@ async fn save_column_config(app: tauri::AppHandle, config: ColumnConfig) -> Resu
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// MusicBrainz managed state + commands (tasks 4.1-4.5)
+// ---------------------------------------------------------------------------
+
+struct MbState(MusicBrainzClient);
+
+#[tauri::command]
+async fn mb_search_releases(
+    query: String,
+    state: tauri::State<'_, MbState>,
+) -> Result<Vec<SearchResultDto>, String> {
+    state.0.search_releases(&query).await
+}
+
+#[tauri::command]
+async fn mb_get_release_details(
+    mbid: String,
+    state: tauri::State<'_, MbState>,
+) -> Result<ReleaseDetailDto, String> {
+    state.0.get_release_details(&mbid).await
+}
+
+#[tauri::command]
+async fn mb_fetch_cover_art(
+    mbid: String,
+    state: tauri::State<'_, MbState>,
+) -> Result<Option<String>, String> {
+    state.0.fetch_cover_art(&mbid).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let mb_client = MusicBrainzClient::new().expect("Failed to create MusicBrainz client");
+
     tauri::Builder::default()
+        .manage(MbState(mb_client))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -565,6 +601,9 @@ pub fn run() {
             rename_preview,
             rename_execute,
             refresh_files,
+            mb_search_releases,
+            mb_get_release_details,
+            mb_fetch_cover_art,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

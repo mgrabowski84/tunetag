@@ -30,6 +30,7 @@ interface MenuBarProps {
   onRenameFromTags?: () => void;
   onAutoNumber?: () => void;
   onRefresh?: () => void;
+  onMusicBrainz?: () => void;
 }
 
 function MenuBar({
@@ -44,6 +45,7 @@ function MenuBar({
   onRenameFromTags,
   onAutoNumber,
   onRefresh,
+  onMusicBrainz,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
@@ -183,7 +185,13 @@ function MenuBar({
     },
     {
       label: "Tag Sources",
-      items: [{ label: "MusicBrainz\u2026", disabled: true }],
+      items: [
+        {
+          label: "MusicBrainz\u2026",
+          disabled: !hasSelection,
+          action: hasSelection ? () => { setOpenMenu(null); onMusicBrainz?.(); } : undefined,
+        },
+      ],
     },
     {
       label: "View",

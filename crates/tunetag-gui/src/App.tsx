@@ -8,6 +8,7 @@ import FileList from "./components/FileList";
 import TagPanel from "./components/TagPanel";
 import RenameDialog from "./components/RenameDialog";
 import AutoNumberDialog from "./components/AutoNumberDialog";
+import MusicBrainzDialog from "./components/MusicBrainzDialog";
 import { FilesProvider, useFiles } from "./FilesContext";
 import { TagEditProvider, useTagEdit } from "./TagEditContext";
 import type { FileEntry, TagUpdate, SaveResult } from "./types";
@@ -96,6 +97,7 @@ function AppInner() {
   const { state: filesState, setFiles, updatePaths } = useFiles();
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showAutoNumberDialog, setShowAutoNumberDialog] = useState(false);
+  const [showMusicBrainzDialog, setShowMusicBrainzDialog] = useState(false);
   const fileListRef = useRef<HTMLDivElement | null>(null);
   const {
     state: editState,
@@ -298,6 +300,7 @@ function AppInner() {
         onRenameFromTags={() => setShowRenameDialog(true)}
         onAutoNumber={() => setShowAutoNumberDialog(true)}
         onRefresh={handleRefresh}
+        onMusicBrainz={() => setShowMusicBrainzDialog(true)}
       />
       <SplitPane
         left={<TagPanel onSave={handleSave} />}
@@ -326,6 +329,16 @@ function AppInner() {
               disc: e.disc,
             }))}
           onClose={() => setShowAutoNumberDialog(false)}
+        />
+      )}
+
+      {/* MusicBrainz dialog */}
+      {showMusicBrainzDialog && (
+        <MusicBrainzDialog
+          selectedFiles={Array.from(filesState.selectedIds)
+            .map((id) => filesState.files.get(id))
+            .filter((e): e is NonNullable<typeof e> => e != null)}
+          onClose={() => setShowMusicBrainzDialog(false)}
         />
       )}
 
