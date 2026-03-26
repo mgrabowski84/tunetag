@@ -94,11 +94,16 @@ function SaveErrorDialog({ result, total, onClose }: SaveErrorDialogProps) {
 // ---------------------------------------------------------------------------
 
 function AppInner() {
-  const { state: filesState, setFiles, updatePaths } = useFiles();
+  const { state: filesState, setFiles, clearFiles, addFilesBatch, finalizeSort, updatePaths } = useFiles();
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showAutoNumberDialog, setShowAutoNumberDialog] = useState(false);
   const [showMusicBrainzDialog, setShowMusicBrainzDialog] = useState(false);
   const fileListRef = useRef<HTMLDivElement | null>(null);
+  // Progressive loading state
+  const [scanning, setScanning] = useState(false);
+  const [scanCount, setScanCount] = useState(0);
+  const scanIdRef = useRef<number>(0);
+  const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     state: editState,
     clearEdits,
@@ -206,23 +211,74 @@ function AppInner() {
   }, [handleSave, canUndo, canRedo, undo, redo]);
 
   // -------------------------------------------------------------------------
-  // Drag and drop
+  // Progressive scan — core function
   // -------------------------------------------------------------------------
-  const loadDroppedPaths = useCallback(
-    async (paths: string[]) => {
-      try {
-        const entries = await invoke<FileEntry[]>("scan_paths", {
-          paths,
-          recursive: filesState.recursive,
-        });
-        setFiles(entries);
-      } catch {
-        // Ignore errors
-      }
+  const startProgressiveScan = useCallback(
+    (paths: string[], recursive: boolean) => {
+      // Increment scan ID to discard events from any previous scan
+      scanIdRef.current += 1;
+      const currentScanId = scanIdRef.current;
+
+      // Clear existing state
+      clearFiles();
+      clearAllEdits();
+      setScanning(true);
+      setScanCount(0);
+
+      // 60-second safety timeout in case scan-complete never arrives
+      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = setTimeout(() => {
+        setScanning(false);
+      }, 60000);
+
+      // Fire-and-forget: command returns the scan_id from Rust
+      invoke<number>("scan_paths_progressive", { paths, recursive }).then(
+        (rustScanId) => {
+          // Update our scanIdRef if needed (Rust may assign its own ID)
+          // We already have currentScanId from the closure — use that
+          void rustScanId;
+        },
+      ).catch(() => {
+        setScanning(false);
+      });
+
+      return currentScanId;
     },
-    [filesState.recursive, setFiles],
+    [clearFiles, clearAllEdits],
   );
 
+  // Event listeners for progressive scan
+  useEffect(() => {
+    const appWindow = getCurrentWebviewWindow();
+    const unlisteners: Array<() => void> = [];
+
+    appWindow
+      .listen<{ scanId: number; entries: FileEntry[] }>(
+        "file-batch-loaded",
+        (event) => {
+          // Discard stale events
+          if (event.payload.scanId !== scanIdRef.current) return;
+          addFilesBatch(event.payload.entries);
+          setScanCount((n) => n + event.payload.entries.length);
+        },
+      )
+      .then((fn) => unlisteners.push(fn));
+
+    appWindow
+      .listen<{ scanId: number; total: number }>("scan-complete", (event) => {
+        if (event.payload.scanId !== scanIdRef.current) return;
+        finalizeSort();
+        setScanning(false);
+        if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
+      })
+      .then((fn) => unlisteners.push(fn));
+
+    return () => unlisteners.forEach((fn) => fn());
+  }, [addFilesBatch, finalizeSort]);
+
+  // -------------------------------------------------------------------------
+  // Drag and drop — uses progressive scan
+  // -------------------------------------------------------------------------
   useEffect(() => {
     const appWindow = getCurrentWebviewWindow();
     let unlisten: (() => void) | undefined;
@@ -232,7 +288,7 @@ function AppInner() {
         if (event.payload.type === "drop") {
           const paths = event.payload.paths;
           if (paths.length > 0) {
-            loadDroppedPaths(paths);
+            startProgressiveScan(paths, filesState.recursive);
           }
         }
       })
@@ -243,7 +299,7 @@ function AppInner() {
     return () => {
       if (unlisten) unlisten();
     };
-  }, [loadDroppedPaths]);
+  }, [startProgressiveScan, filesState.recursive]);
 
   // -------------------------------------------------------------------------
   // Refresh handler (F5 / View → Refresh)
@@ -301,10 +357,11 @@ function AppInner() {
         onAutoNumber={() => setShowAutoNumberDialog(true)}
         onRefresh={handleRefresh}
         onMusicBrainz={() => setShowMusicBrainzDialog(true)}
+        onScanPaths={startProgressiveScan}
       />
       <SplitPane
         left={<TagPanel onSave={handleSave} />}
-        right={<FileList dirtyPaths={dirtyPaths} />}
+        right={<FileList dirtyPaths={dirtyPaths} scanning={scanning} scanCount={scanCount} />}
         defaultLeftWidth={288}
         minLeft={220}
         minRight={400}

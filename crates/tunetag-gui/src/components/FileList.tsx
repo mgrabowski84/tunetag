@@ -62,9 +62,13 @@ interface FileListProps {
   dirtyPaths?: Set<string>;
   /** Ref to the Title input in TagPanel for Enter-to-edit focus */
   titleInputRef?: React.RefObject<HTMLInputElement | null>;
+  /** Whether a progressive scan is in progress */
+  scanning?: boolean;
+  /** Number of files loaded so far during a progressive scan */
+  scanCount?: number;
 }
 
-function FileList({ dirtyPaths = new Set(), titleInputRef }: FileListProps) {
+function FileList({ dirtyPaths = new Set(), titleInputRef, scanning = false, scanCount = 0 }: FileListProps) {
   const { state, setSort, selectFile } = useFiles();
   const { files, sortedIds, sort, selectedIds } = state;
 
@@ -374,6 +378,15 @@ function FileList({ dirtyPaths = new Set(), titleInputRef }: FileListProps) {
 
   return (
     <section className="flex-1 flex flex-col bg-surface-container-lowest overflow-hidden">
+      {/* Loading bar — shown during progressive scan */}
+      {scanning && (
+        <div className="shrink-0 h-6 px-3 flex items-center gap-2 bg-primary-container border-b border-primary/20">
+          <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+          <span className="text-[11px] text-on-primary-container font-medium">
+            Loading… {scanCount} file{scanCount !== 1 ? "s" : ""}
+          </span>
+        </div>
+      )}
       {/* Table header */}
       <div className="shrink-0 overflow-x-auto" onContextMenu={handleContextMenu}>
         <div style={{ minWidth: `${totalWidth}px` }}>

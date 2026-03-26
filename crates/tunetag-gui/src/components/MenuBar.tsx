@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useFiles } from "../FilesContext";
-import type { FileEntry } from "../types";
 
 interface MenuItem {
   label: string;
@@ -31,6 +29,7 @@ interface MenuBarProps {
   onAutoNumber?: () => void;
   onRefresh?: () => void;
   onMusicBrainz?: () => void;
+  onScanPaths?: (paths: string[], recursive: boolean) => void;
 }
 
 function MenuBar({
@@ -46,10 +45,11 @@ function MenuBar({
   onAutoNumber,
   onRefresh,
   onMusicBrainz,
+  onScanPaths,
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<number | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
-  const { state, setFiles, toggleRecursive } = useFiles();
+  const { state, toggleRecursive } = useFiles();
 
   const handleOpenFiles = useCallback(async () => {
     setOpenMenu(null);
@@ -65,20 +65,14 @@ function MenuBar({
       });
       if (!selected) return;
 
-      // selected is string | string[] depending on multiple
       const paths = Array.isArray(selected) ? selected : [selected];
       if (paths.length === 0) return;
 
-      const entries = await invoke<FileEntry[]>("scan_paths", {
-        paths,
-        recursive: false,
-      });
-      setFiles(entries);
-      onCloseAll?.(); // clear undo stack on new file load
+      onScanPaths?.(paths, false);
     } catch {
       // User cancelled or error — do nothing
     }
-  }, [setFiles, onCloseAll]);
+  }, [onScanPaths]);
 
   const handleOpenFolder = useCallback(async () => {
     setOpenMenu(null);
@@ -92,16 +86,11 @@ function MenuBar({
       const folderPath = typeof selected === "string" ? selected : selected[0];
       if (!folderPath) return;
 
-      const entries = await invoke<FileEntry[]>("scan_paths", {
-        paths: [folderPath],
-        recursive: state.recursive,
-      });
-      setFiles(entries);
-      onCloseAll?.(); // clear undo stack on new folder load
+      onScanPaths?.([folderPath], state.recursive);
     } catch {
       // User cancelled or error — do nothing
     }
-  }, [state.recursive, setFiles, onCloseAll]);
+  }, [state.recursive, onScanPaths]);
 
   const handleToggleRecursive = useCallback(() => {
     setOpenMenu(null);

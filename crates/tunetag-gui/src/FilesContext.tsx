@@ -38,6 +38,9 @@ const initialState: FilesState = {
 
 type FilesAction =
   | { type: "SET_FILES"; payload: FileEntry[] }
+  | { type: "CLEAR_FILES" }
+  | { type: "ADD_FILES_BATCH"; payload: FileEntry[] }
+  | { type: "FINALIZE_SORT" }
   | { type: "SET_SORT"; payload: SortConfig | null }
   | { type: "SELECT"; payload: { id: string; ctrl: boolean; shift: boolean } }
   | { type: "SELECT_ALL" }
@@ -107,6 +110,36 @@ function filesReducer(state: FilesState, action: FilesAction): FilesState {
         sortedIds,
         selectedIds: new Set(),
       };
+    }
+
+    case "CLEAR_FILES": {
+      return {
+        ...state,
+        files: new Map(),
+        sortedIds: [],
+        selectedIds: new Set(),
+      };
+    }
+
+    case "ADD_FILES_BATCH": {
+      const next = new Map(state.files);
+      const newIds: string[] = [];
+      for (const entry of action.payload) {
+        if (!next.has(entry.id)) {
+          next.set(entry.id, entry);
+          newIds.push(entry.id);
+        }
+      }
+      return {
+        ...state,
+        files: next,
+        sortedIds: [...state.sortedIds, ...newIds],
+      };
+    }
+
+    case "FINALIZE_SORT": {
+      const sortedIds = sortIds(state.files, [...state.sortedIds], state.sort);
+      return { ...state, sortedIds };
     }
 
     case "SET_SORT": {
@@ -191,6 +224,9 @@ function filesReducer(state: FilesState, action: FilesAction): FilesState {
 interface FilesContextValue {
   state: FilesState;
   setFiles: (files: FileEntry[]) => void;
+  clearFiles: () => void;
+  addFilesBatch: (entries: FileEntry[]) => void;
+  finalizeSort: () => void;
   setSort: (sort: SortConfig | null) => void;
   selectFile: (id: string, ctrl: boolean, shift: boolean) => void;
   selectAll: () => void;
@@ -206,6 +242,21 @@ export function FilesProvider({ children }: { children: ReactNode }) {
 
   const setFiles = useCallback(
     (files: FileEntry[]) => dispatch({ type: "SET_FILES", payload: files }),
+    [],
+  );
+
+  const clearFiles = useCallback(
+    () => dispatch({ type: "CLEAR_FILES" }),
+    [],
+  );
+
+  const addFilesBatch = useCallback(
+    (entries: FileEntry[]) => dispatch({ type: "ADD_FILES_BATCH", payload: entries }),
+    [],
+  );
+
+  const finalizeSort = useCallback(
+    () => dispatch({ type: "FINALIZE_SORT" }),
     [],
   );
 
@@ -246,6 +297,9 @@ export function FilesProvider({ children }: { children: ReactNode }) {
       value={{
         state,
         setFiles,
+        clearFiles,
+        addFilesBatch,
+        finalizeSort,
         setSort,
         selectFile,
         selectAll,

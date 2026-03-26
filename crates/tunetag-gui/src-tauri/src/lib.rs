@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use walkdir::WalkDir;
 
 /// Translate a path string to a real filesystem path.
@@ -207,6 +207,86 @@ async fn scan_paths(paths: Vec<String>, recursive: bool) -> Result<Vec<FileEntry
         .collect();
 
     Ok(entries)
+}
+
+// ---------------------------------------------------------------------------
+// Progressive file loading (scan_paths_progressive)
+// ---------------------------------------------------------------------------
+
+/// Monotonically increasing scan ID — incremented each time a new progressive scan starts.
+static SCAN_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct FileBatchPayload {
+    scan_id: u64,
+    entries: Vec<FileEntry>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ScanCompletePayload {
+    scan_id: u64,
+    total: usize,
+}
+
+/// Tauri command: start a progressive file scan. Returns immediately.
+/// Emits "file-batch-loaded" events with micro-batches of FileEntry objects,
+/// then emits "scan-complete" when done.
+#[tauri::command]
+async fn scan_paths_progressive(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+    recursive: bool,
+) -> Result<u64, String> {
+    let scan_id = SCAN_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+
+    tauri::async_runtime::spawn(async move {
+        let resolved: Vec<PathBuf> = paths.iter().map(|p| resolve_path(p)).collect();
+        let audio_files = collect_audio_files(&resolved, recursive);
+        let total = audio_files.len();
+
+        const BATCH_SIZE: usize = 20;
+        const FLUSH_INTERVAL_MS: u128 = 100;
+
+        let mut buffer: Vec<FileEntry> = Vec::with_capacity(BATCH_SIZE);
+        let mut last_flush = std::time::Instant::now();
+
+        for path in &audio_files {
+            if let Some(entry) = read_file_entry(path) {
+                buffer.push(entry);
+
+                let should_flush = buffer.len() >= BATCH_SIZE
+                    || last_flush.elapsed().as_millis() >= FLUSH_INTERVAL_MS;
+
+                if should_flush {
+                    let payload = FileBatchPayload {
+                        scan_id,
+                        entries: std::mem::take(&mut buffer),
+                    };
+                    app.emit("file-batch-loaded", payload).ok();
+                    last_flush = std::time::Instant::now();
+                }
+            }
+        }
+
+        // Flush remaining
+        if !buffer.is_empty() {
+            let payload = FileBatchPayload {
+                scan_id,
+                entries: buffer,
+            };
+            app.emit("file-batch-loaded", payload).ok();
+        }
+
+        app.emit(
+            "scan-complete",
+            ScanCompletePayload { scan_id, total },
+        )
+        .ok();
+    });
+
+    Ok(scan_id)
 }
 
 /// Get the column config file path in the app data directory.
@@ -588,6 +668,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             scan_paths,
+            scan_paths_progressive,
             save_tags,
             load_column_config,
             save_column_config,
